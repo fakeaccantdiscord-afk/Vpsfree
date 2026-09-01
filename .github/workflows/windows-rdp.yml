@@ -1,7 +1,6 @@
 name: Windows Cloud RDP
 
-on:
-  workflow_dispatch:
+on: workflow_dispatch
 
 jobs:
   build:
@@ -16,22 +15,12 @@ jobs:
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
 
-          Write-Host "=== RDP Configuration ==="
-          Get-Service TermService
-          Get-NetFirewallRule -DisplayGroup "Remote Desktop" | Select-Object DisplayName, Enabled, Profile
-
       - name: 2. Create Admin Account
         shell: powershell
         run: |
           $Password = ConvertTo-SecureString "P@ssw0rd1qazXSW@#" -AsPlainText -Force
-
           New-LocalUser -Name "NvDAdmin" -Password $Password -PasswordNeverExpires -ErrorAction SilentlyContinue
-
-          Add-LocalGroupMember `
-            -Group "Administrators" `
-            -Member "NvDAdmin" `
-            -ErrorAction SilentlyContinue
-
+          Add-LocalGroupMember -Group "Administrators" -Member "NvDAdmin" -ErrorAction SilentlyContinue
           net user runneradmin "P@ssw0rd1qazXSW@#"
 
       - name: 3. Install & Connect Tailscale VPN
@@ -39,39 +28,25 @@ jobs:
         env:
           TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
         run: |
-          Invoke-WebRequest `
-            "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" `
-            -OutFile "C:\tailscale.msi"
-
-          Start-Process `
-            msiexec.exe `
-            -ArgumentList "/i C:\tailscale.msi /quiet /norestart" `
-            -Wait
+          Invoke-WebRequest "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile "C:\tailscale.msi"
+          Start-Process msiexec.exe -ArgumentList "/i C:\tailscale.msi /quiet /norestart" -Wait
 
           Start-Sleep -Seconds 5
 
-          & "C:\Program Files\Tailscale\tailscale.exe" up `
-            --authkey="$env:TAILSCALE_AUTHKEY" `
-            --hostname="github-rdp-server"
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey="$env:TAILSCALE_AUTHKEY" --hostname="github-rdp-server"
 
           Start-Sleep -Seconds 8
 
           Write-Host "=== Tailscale Status ==="
           & "C:\Program Files\Tailscale\tailscale.exe" status
 
-          Write-Host "=== Tailscale IP ==="
           $ts_ip = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
 
-          Write-Host ""
-          Write-Host "==================================================" -ForegroundColor Green
-          Write-Host "  >>> RDP SERVER IS READY! <<<" -ForegroundColor Cyan
-          Write-Host "  Tailscale IP : $ts_ip" -ForegroundColor Yellow
-          Write-Host "  Username     : NvDAdmin" -ForegroundColor Yellow
-          Write-Host "  Password     : P@ssw0rd1qazXSW@#" -ForegroundColor Yellow
-          Write-Host "  >> Open mstsc and connect to: $ts_ip" -ForegroundColor Magenta
-          Write-Host "==================================================" -ForegroundColor Green
+          Write-Host "Tailscale IP: $ts_ip"
+          Write-Host "Username: NvDAdmin"
+          Write-Host "Password: P@ssw0rd1qazXSW@#"
 
-      - name: 4. Test RDP Port
+      - name: 4. Test RDP
         shell: powershell
         run: |
           Write-Host "=== RDP Service ==="
